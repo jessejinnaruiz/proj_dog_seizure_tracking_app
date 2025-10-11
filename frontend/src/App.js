@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { initDB, getSeizures, addSeizure } from './database';
 
 // --- Helper Function for Data Analysis ---
 /**
@@ -7,12 +8,22 @@ import React, { useState, useEffect, useMemo } from 'react';
  * @returns {Object|null} - An object with calculated insights, or null if not enough data.
  */
 const analyzeSeizureData = (seizures) => {
-    // Only generate insights if there are at least 3 records
-    if (!seizures || seizures.length < 3) {
-        return null;
+    if (!seizures || seizures.length < 2) {
+        return null; // Need at least 2 seizures for frequency analysis
     }
 
-    // 1. Calculate the most common triggers
+    // --- Data Preparation ---
+    const sortedSeizures = [...seizures].sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+    // Helper to format milliseconds into a readable string
+    const formatTimeDiff = (ms) => {
+        if (ms <= 0) return 'N/A';
+        const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        return `${days}d ${hours}h`;
+    };
+
+    // --- 1. Basic Insights ---
     const triggerCounts = seizures.reduce((acc, seizure) => {
         const trigger = seizure.trigger?.trim().toLowerCase();
         if (trigger && trigger !== 'n/a' && trigger !== '') {
@@ -20,32 +31,64 @@ const analyzeSeizureData = (seizures) => {
         }
         return acc;
     }, {});
-    const commonTriggers = Object.entries(triggerCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 3)
-        .map(([trigger]) => trigger);
+    const commonTriggers = Object.entries(triggerCounts).sort(([, a], [, b]) => b - a).slice(0, 3).map(([trigger]) => trigger);
 
-    // 2. Calculate average duration
-    let totalSeconds = 0;
-    let countWithDuration = 0;
-    seizures.forEach(s => {
-        const mins = s.duration_minutes || 0;
-        const secs = s.duration_seconds || 0;
-        if (mins > 0 || secs > 0) {
-            totalSeconds += (mins * 60) + secs;
+    // --- 2. Duration Analysis ---
+    let totalSeconds = 0, countWithDuration = 0, minDuration = Infinity, maxDuration = 0;
+    sortedSeizures.forEach(s => {
+        const durationInSeconds = (s.duration_minutes || 0) * 60 + (s.duration_seconds || 0);
+        if (durationInSeconds > 0) {
+            totalSeconds += durationInSeconds;
             countWithDuration++;
+            if (durationInSeconds < minDuration) minDuration = durationInSeconds;
+            if (durationInSeconds > maxDuration) maxDuration = durationInSeconds;
         }
     });
     const avgSeconds = countWithDuration > 0 ? Math.round(totalSeconds / countWithDuration) : 0;
-    const averageDuration = {
-        minutes: Math.floor(avgSeconds / 60),
-        seconds: avgSeconds % 60,
-    };
+    const averageDuration = { minutes: Math.floor(avgSeconds / 60), seconds: avgSeconds % 60 };
+    const shortestDuration = minDuration === Infinity ? null : { minutes: Math.floor(minDuration / 60), seconds: minDuration % 60 };
+    const longestDuration = maxDuration === 0 ? null : { minutes: Math.floor(maxDuration / 60), seconds: maxDuration % 60 };
+
+    // --- 3. Frequency Analysis ---
+    const timeDiffs = [];
+    for (let i = 1; i < sortedSeizures.length; i++) {
+        const diff = new Date(sortedSeizures[i].dateTime) - new Date(sortedSeizures[i - 1].dateTime);
+        timeDiffs.push(diff);
+    }
+    const avgTimeBetween = timeDiffs.length > 0 ? timeDiffs.reduce((a, b) => a + b, 0) / timeDiffs.length : 0;
+    const longestSeizureFreePeriod = timeDiffs.length > 0 ? Math.max(...timeDiffs) : 0;
+    const lastSeizureDate = sortedSeizures[sortedSeizures.length - 1].dateTime;
+
+    // --- 4. Time-of-Day & Cluster Analysis ---
+    const timeOfDayCounts = { Morning: 0, Afternoon: 0, Evening: 0, Night: 0 };
+    let hasClusterSeizures = false;
+    sortedSeizures.forEach((s, index) => {
+        const hour = new Date(s.dateTime).getHours();
+        if (hour >= 5 && hour < 12) timeOfDayCounts.Morning++;
+        else if (hour >= 12 && hour < 17) timeOfDayCounts.Afternoon++;
+        else if (hour >= 17 && hour < 21) timeOfDayCounts.Evening++;
+        else timeOfDayCounts.Night++;
+
+        if (index > 0) {
+            const diff = new Date(s.dateTime) - new Date(sortedSeizures[index - 1].dateTime);
+            if (diff < 24 * 60 * 60 * 1000) {
+                hasClusterSeizures = true;
+            }
+        }
+    });
+    const mostCommonTime = Object.keys(timeOfDayCounts).reduce((a, b) => timeOfDayCounts[a] > timeOfDayCounts[b] ? a : b);
 
     return {
-        totalCount: seizures.length,
+        totalCount: sortedSeizures.length,
         commonTriggers,
         averageDuration,
+        shortestDuration,
+        longestDuration,
+        lastSeizureDate,
+        averageTimeBetween: formatTimeDiff(avgTimeBetween),
+        longestSeizureFreePeriod: formatTimeDiff(longestSeizureFreePeriod),
+        mostCommonTime,
+        hasClusterSeizures,
     };
 };
 
@@ -55,7 +98,7 @@ function App() {
   // --- State Variables ---
   const [seizures, setSeizures] = useState([]);
   const [view, setView] = useState('log'); // 'log', 'history', 'insights', 'emergency'
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Now represents DB loading
   const [error, setError] = useState(null);
 
   // Form state
@@ -67,30 +110,37 @@ function App() {
 
 
   // --- Data Fetching ---
-  const fetchSeizures = async () => {
+  // This function now loads seizures directly from the in-browser database.
+  const loadSeizuresFromDB = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/seizures');
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      const data = await response.json();
+      const data = await getSeizures();
       setSeizures(data);
       setError(null);
     } catch (err) {
-      console.error("Fetch error:", err);
-      setError('Failed to load seizure history. Please check if the backend server is running.');
+      console.error(err);
+      setError('Failed to load seizure history from the local database.');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSeizures();
+    // Initialize the database and then load the data.
+    const initialize = async () => {
+      try {
+        await initDB();
+        await loadSeizuresFromDB();
+      } catch (err) {
+        console.error(err);
+        setError('Failed to initialize the local database.');
+        setIsLoading(false);
+      }
+    };
+    initialize();
   }, []);
 
   // --- Derived State for Insights ---
-  // useMemo ensures this analysis only re-runs when the seizure data changes
   const insights = useMemo(() => analyzeSeizureData(seizures), [seizures]);
 
   // --- Event Handlers ---
@@ -107,29 +157,20 @@ function App() {
     };
 
     try {
-      const response = await fetch('/api/seizures', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newSeizure),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save seizure.');
-      }
-
+      await addSeizure(newSeizure);
+      
       // Reset form and refresh data
       setDateTime('');
       setDurationMinutes('');
       setDurationSeconds('');
       setDescription('');
       setTrigger('');
-      await fetchSeizures();
+      await loadSeizuresFromDB(); // Reload data from the local DB
       setView('history'); // Switch to history view after logging
 
     } catch (err) {
-      setError(err.message);
+      console.error(err);
+      setError('Failed to save seizure to the local database.');
     }
   };
 
@@ -140,7 +181,7 @@ function App() {
     }
 
     if (error) {
-        return <p style={{ color: 'red' }}>{error}</p>;
+        return <p className="error-message">{error}</p>;
     }
 
     switch (view) {
@@ -154,9 +195,9 @@ function App() {
             </div>
             <div>
               <label>Duration:</label>
-              <span>
-                <input type="number" placeholder="Minutes" value={durationMinutes} onChange={e => setDurationMinutes(e.target.value)} min="0" style={{width: '100px', marginRight: '10px'}}/>
-                <input type="number" placeholder="Seconds" value={durationSeconds} onChange={e => setDurationSeconds(e.target.value)} min="0" max="59" style={{width: '100px'}} />
+              <span className="duration-inputs">
+                <input type="number" placeholder="Minutes" value={durationMinutes} onChange={e => setDurationMinutes(e.target.value)} min="0" />
+                <input type="number" placeholder="Seconds" value={durationSeconds} onChange={e => setDurationSeconds(e.target.value)} min="0" max="59" />
               </span>
             </div>
             <div>
@@ -193,23 +234,46 @@ function App() {
             <div>
                 <h2>Data Insights</h2>
                 {!insights ? (
-                    <p>Log at least 3 seizures to see automated insights and patterns.</p>
+                    <p>Log at least 2 seizures to see automated insights and patterns.</p>
                 ) : (
-                    <div style={{textAlign: 'left', maxWidth: '600px', margin: 'auto'}}>
-                        <h3>Summary</h3>
-                        <p><strong>Total Seizures Logged:</strong> {insights.totalCount}</p>
-                        <p><strong>Average Duration:</strong> {insights.averageDuration.minutes}m {insights.averageDuration.seconds}s</p>
-                        
-                        <h3 style={{marginTop: '2em'}}>Common Triggers</h3>
-                        {insights.commonTriggers.length > 0 ? (
-                            <ul style={{ listStyleType: 'disc', paddingLeft: '20px' }}>
-                                {insights.commonTriggers.map((trigger, index) => (
-                                    <li key={index} style={{textTransform: 'capitalize'}}>{trigger}</li>
-                                ))}
-                            </ul>
-                        ) : (
-                            <p>Not enough trigger data to identify common patterns yet.</p>
+                    <div className="insights-container">
+                        {insights.hasClusterSeizures && (
+                            <div className="warning-card">
+                                <strong>Warning:</strong> Multiple seizures have been detected within a 24-hour period (cluster seizures). Please consult your veterinarian.
+                            </div>
                         )}
+
+                        <div className="insights-grid">
+                            <div className="content-card">
+                                <h3 className="subheader">Frequency</h3>
+                                <p><strong>Last Seizure:</strong> {new Date(insights.lastSeizureDate).toLocaleDateString()}</p>
+                                <p><strong>Avg. Time Between:</strong> {insights.averageTimeBetween}</p>
+                                <p><strong>Longest Seizure-Free:</strong> {insights.longestSeizureFreePeriod}</p>
+                            </div>
+
+                            <div className="content-card">
+                                <h3 className="subheader">Duration</h3>
+                                <p><strong>Average:</strong> {insights.averageDuration.minutes}m {insights.averageDuration.seconds}s</p>
+                                {insights.shortestDuration && <p><strong>Shortest:</strong> {insights.shortestDuration.minutes}m {insights.shortestDuration.seconds}s</p>}
+                                {insights.longestDuration && <p><strong>Longest:</strong> {insights.longestDuration.minutes}m {insights.longestDuration.seconds}s</p>}
+                            </div>
+
+                            <div className="content-card">
+                                <h3 className="subheader">Patterns</h3>
+                                <p><strong>Total Logged:</strong> {insights.totalCount}</p>
+                                <p><strong>Most Common Time:</strong> {insights.mostCommonTime}</p>
+                                <p><strong>Common Triggers:</strong></p>
+                                {insights.commonTriggers.length > 0 ? (
+                                    <ul className="insights-list">
+                                        {insights.commonTriggers.map((trigger, index) => (
+                                            <li key={index}>{trigger}</li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p style={{marginLeft: '1em', fontStyle: 'italic'}}>No common triggers identified yet.</p>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
@@ -218,10 +282,10 @@ function App() {
         return (
             <div>
                 <h2>Emergency Information & Disclaimer</h2>
-                <p style={{textAlign: 'left', maxWidth: '600px', margin: 'auto', lineHeight: '1.6'}}><strong>Disclaimer:</strong> This app is a tracking tool, not a medical device. The information provided here is for informational purposes only and is not a substitute for professional veterinary advice. Always consult your veterinarian for diagnosis and treatment.</p>
-                <h3 style={{marginTop: '2em'}}>When to Seek Emergency Care</h3>
+                <p className="disclaimer"><strong>Disclaimer:</strong> This app is a tracking tool, not medical advice. The information provided here is for informational purposes only and is not a substitute for professional veterinary advice. Always consult your veterinarian for diagnosis and treatment.</p>
+                <h3 className="subheader">When to Seek Emergency Care</h3>
                 <p>According to veterinary experts, you should consider a seizure an emergency if:</p>
-                <ul style={{textAlign: 'left', display: 'inline-block'}}>
+                <ul className="info-list">
                     <li>It is your dog's first seizure.</li>
                     <li>The seizure lasts longer than 5 minutes.</li>
                     <li>Your dog has multiple seizures in a row (cluster seizures).</li>
@@ -236,13 +300,13 @@ function App() {
 
 
   return (
-    <div className="App" style={{textAlign: 'center'}}>
+    <div className="App">
       <h1>Canine Seizure Tracker</h1>
       <nav>
-        <button onClick={() => setView('log')}>Log New Seizure</button>
-        <button onClick={() => setView('history')}>View History</button>
-        <button onClick={() => setView('insights')}>Insights</button>
-        <button onClick={() => setView('emergency')}>Emergency Info</button>
+        <button className={view === 'log' ? 'active' : ''} onClick={() => setView('log')}>Log New Seizure</button>
+        <button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}>View History</button>
+        <button className={view === 'insights' ? 'active' : ''} onClick={() => setView('insights')}>Insights</button>
+        <button className={view === 'emergency' ? 'active' : ''} onClick={() => setView('emergency')}>Emergency Info</button>
       </nav>
       <main>
         {renderContent()}
@@ -252,4 +316,3 @@ function App() {
 }
 
 export default App;
-
