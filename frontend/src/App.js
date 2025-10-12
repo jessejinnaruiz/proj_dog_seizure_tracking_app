@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initDB, getSeizures, addSeizure } from './database';
 
-// --- Helper Function for Data Analysis ---
 /**
  * Analyzes seizure data to find patterns.
  * @param {Array} seizures - The array of seizure objects.
@@ -9,13 +8,11 @@ import { initDB, getSeizures, addSeizure } from './database';
  */
 const analyzeSeizureData = (seizures) => {
     if (!seizures || seizures.length < 2) {
-        return null; // Need at least 2 seizures for frequency analysis
+        return null;
     }
 
-    // --- Data Preparation ---
     const sortedSeizures = [...seizures].sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
 
-    // Helper to format milliseconds into a readable string
     const formatTimeDiff = (ms) => {
         if (ms <= 0) return 'N/A';
         const days = Math.floor(ms / (1000 * 60 * 60 * 24));
@@ -23,7 +20,6 @@ const analyzeSeizureData = (seizures) => {
         return `${days}d ${hours}h`;
     };
 
-    // --- 1. Basic Insights ---
     const triggerCounts = seizures.reduce((acc, seizure) => {
         const trigger = seizure.trigger?.trim().toLowerCase();
         if (trigger && trigger !== 'n/a' && trigger !== '') {
@@ -33,7 +29,6 @@ const analyzeSeizureData = (seizures) => {
     }, {});
     const commonTriggers = Object.entries(triggerCounts).sort(([, a], [, b]) => b - a).slice(0, 3).map(([trigger]) => trigger);
 
-    // --- 2. Duration Analysis ---
     let totalSeconds = 0, countWithDuration = 0, minDuration = Infinity, maxDuration = 0;
     sortedSeizures.forEach(s => {
         const durationInSeconds = (s.duration_minutes || 0) * 60 + (s.duration_seconds || 0);
@@ -49,7 +44,6 @@ const analyzeSeizureData = (seizures) => {
     const shortestDuration = minDuration === Infinity ? null : { minutes: Math.floor(minDuration / 60), seconds: minDuration % 60 };
     const longestDuration = maxDuration === 0 ? null : { minutes: Math.floor(maxDuration / 60), seconds: maxDuration % 60 };
 
-    // --- 3. Frequency Analysis ---
     const timeDiffs = [];
     for (let i = 1; i < sortedSeizures.length; i++) {
         const diff = new Date(sortedSeizures[i].dateTime) - new Date(sortedSeizures[i - 1].dateTime);
@@ -59,7 +53,6 @@ const analyzeSeizureData = (seizures) => {
     const longestSeizureFreePeriod = timeDiffs.length > 0 ? Math.max(...timeDiffs) : 0;
     const lastSeizureDate = sortedSeizures[sortedSeizures.length - 1].dateTime;
 
-    // --- 4. Time-of-Day & Cluster Analysis ---
     const timeOfDayCounts = { Morning: 0, Afternoon: 0, Evening: 0, Night: 0 };
     let hasClusterSeizures = false;
     sortedSeizures.forEach((s, index) => {
@@ -92,25 +85,17 @@ const analyzeSeizureData = (seizures) => {
     };
 };
 
-
-// --- Main App Component ---
 function App() {
-  // --- State Variables ---
   const [seizures, setSeizures] = useState([]);
-  const [view, setView] = useState('log'); // 'log', 'history', 'insights', 'emergency'
-  const [isLoading, setIsLoading] = useState(true); // Now represents DB loading
+  const [view, setView] = useState('log');
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  // Form state
   const [dateTime, setDateTime] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
   const [durationSeconds, setDurationSeconds] = useState('');
   const [description, setDescription] = useState('');
   const [trigger, setTrigger] = useState('');
 
-
-  // --- Data Fetching ---
-  // This function now loads seizures directly from the in-browser database.
   const loadSeizuresFromDB = async () => {
     try {
       setIsLoading(true);
@@ -126,7 +111,6 @@ function App() {
   };
 
   useEffect(() => {
-    // Initialize the database and then load the data.
     const initialize = async () => {
       try {
         await initDB();
@@ -140,10 +124,7 @@ function App() {
     initialize();
   }, []);
 
-  // --- Derived State for Insights ---
   const insights = useMemo(() => analyzeSeizureData(seizures), [seizures]);
-
-  // --- Event Handlers ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     const newSeizure = {
@@ -158,23 +139,19 @@ function App() {
 
     try {
       await addSeizure(newSeizure);
-      
-      // Reset form and refresh data
       setDateTime('');
       setDurationMinutes('');
       setDurationSeconds('');
       setDescription('');
       setTrigger('');
-      await loadSeizuresFromDB(); // Reload data from the local DB
-      setView('history'); // Switch to history view after logging
+      await loadSeizuresFromDB();
+      setView('history');
 
     } catch (err) {
       console.error(err);
       setError('Failed to save seizure to the local database.');
     }
   };
-
-  // --- Rendering ---
   const renderContent = () => {
     if (isLoading) {
       return <p>Loading seizure history...</p>;
