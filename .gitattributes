@@ -1,0 +1,17 @@
+# Set default behavior to automatically handle text files
+* text=auto
+
+# Explicitly declare text files to ensure they are normalized to LF line endings
+*.js      text
+*.css     text
+*.html    text
+*.json    text
+*.md      text
+*.txt     text
+.gitignore text
+
+# Declare files that should not be modified (binary files)
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
