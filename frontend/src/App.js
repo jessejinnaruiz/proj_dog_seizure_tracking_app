@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initDB, getSeizures, addSeizure } from './database';
+import BatchImport from './BatchImport';
 
 /**
  * Analyzes seizure data to find patterns.
@@ -255,6 +256,8 @@ function App() {
                 )}
             </div>
         );
+      case 'batchImport':
+        return <BatchImport onImportComplete={loadSeizuresFromDB} />;
       case 'emergency':
         return (
             <div>
@@ -281,6 +284,7 @@ function App() {
       <h1>Canine Seizure Tracker</h1>
       <nav>
         <button className={view === 'log' ? 'active' : ''} onClick={() => setView('log')}>Log New Seizure</button>
+        <button className={view === 'batchImport' ? 'active' : ''} onClick={() => setView('batchImport')}>Batch Import</button>
         <button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}>View History</button>
         <button className={view === 'insights' ? 'active' : ''} onClick={() => setView('insights')}>Insights</button>
         <button className={view === 'emergency' ? 'active' : ''} onClick={() => setView('emergency')}>Emergency Info</button>
