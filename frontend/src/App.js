@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { initDB, getSeizures, addSeizure } from './database';
 import BatchImport from './BatchImport';
+import './App.css';
 
 /**
  * Analyzes seizure data to find patterns.
@@ -155,46 +156,86 @@ function App() {
   };
   const renderContent = () => {
     if (isLoading) {
-      return <p>Loading seizure history...</p>;
+      return <div className="loading" role="status" aria-live="polite"><span>Loading seizure history...</span></div>;
     }
 
     if (error) {
-        return <p className="error-message">{error}</p>;
+        return <div className="error-message" role="alert" aria-live="assertive">{error}</div>;
     }
 
     switch (view) {
       case 'log':
         return (
-          <form onSubmit={handleSubmit}>
-            <h2>Log a New Seizure</h2>
+          <form onSubmit={handleSubmit} aria-labelledby="log-heading">
+            <h2 id="log-heading">Log a New Seizure</h2>
             <div>
-              <label>Date and Time:</label>
-              <input type="datetime-local" value={dateTime} onChange={e => setDateTime(e.target.value)} required />
+              <label htmlFor="seizure-datetime">Date and Time:</label>
+              <input 
+                id="seizure-datetime" 
+                type="datetime-local" 
+                value={dateTime} 
+                onChange={e => setDateTime(e.target.value)} 
+                required 
+                aria-required="true"
+              />
             </div>
             <div>
-              <label>Duration:</label>
-              <span className="duration-inputs">
-                <input type="number" placeholder="Minutes" value={durationMinutes} onChange={e => setDurationMinutes(e.target.value)} min="0" />
-                <input type="number" placeholder="Seconds" value={durationSeconds} onChange={e => setDurationSeconds(e.target.value)} min="0" max="59" />
+              <label id="duration-label">Duration:</label>
+              <span className="duration-inputs" role="group" aria-labelledby="duration-label">
+                <input 
+                  id="duration-minutes" 
+                  type="number" 
+                  placeholder="Minutes" 
+                  value={durationMinutes} 
+                  onChange={e => setDurationMinutes(e.target.value)} 
+                  min="0" 
+                  aria-label="Duration in minutes"
+                />
+                <input 
+                  id="duration-seconds" 
+                  type="number" 
+                  placeholder="Seconds" 
+                  value={durationSeconds} 
+                  onChange={e => setDurationSeconds(e.target.value)} 
+                  min="0" 
+                  max="59" 
+                  aria-label="Duration in seconds"
+                />
               </span>
             </div>
             <div>
-                <label>Possible Trigger:</label>
-                <input type="text" value={trigger} onChange={e => setTrigger(e.target.value)} placeholder="e.g., Woke up suddenly" />
+                <label htmlFor="seizure-trigger">Possible Trigger:</label>
+                <input 
+                  id="seizure-trigger" 
+                  type="text" 
+                  value={trigger} 
+                  onChange={e => setTrigger(e.target.value)} 
+                  placeholder="e.g., Woke up suddenly" 
+                  aria-describedby="trigger-hint"
+                />
+                <span id="trigger-hint" className="sr-only">Enter any potential trigger that may have caused the seizure</span>
             </div>
             <div>
-              <label>Description:</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)}></textarea>
+              <label htmlFor="seizure-description">Description:</label>
+              <textarea 
+                id="seizure-description" 
+                value={description} 
+                onChange={e => setDescription(e.target.value)}
+                aria-describedby="description-hint"
+              ></textarea>
+              <span id="description-hint" className="sr-only">Provide additional details about the seizure</span>
             </div>
-            <button type="submit">Save Seizure</button>
+            <button type="submit" aria-label="Save seizure entry">Save Seizure</button>
           </form>
         );
       case 'history':
         return (
-          <div>
-            <h2>Seizure History</h2>
-            {seizures.length === 0 ? <p>No seizures logged yet.</p> : (
-              <ul>
+          <section aria-labelledby="history-heading">
+            <h2 id="history-heading">Seizure History</h2>
+            {seizures.length === 0 ? (
+              <p role="status">No seizures logged yet.</p>
+            ) : (
+              <ul aria-label="List of seizure entries">
                 {seizures.map(s => (
                   <li key={s.id}>
                     <strong>{new Date(s.dateTime).toLocaleString()}</strong>
@@ -205,7 +246,7 @@ function App() {
                 ))}
               </ul>
             )}
-          </div>
+          </section>
         );
       case 'insights':
         return (
@@ -281,15 +322,55 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Canine Seizure Tracker</h1>
-      <nav>
-        <button className={view === 'log' ? 'active' : ''} onClick={() => setView('log')}>Log New Seizure</button>
-        <button className={view === 'batchImport' ? 'active' : ''} onClick={() => setView('batchImport')}>Batch Import</button>
-        <button className={view === 'history' ? 'active' : ''} onClick={() => setView('history')}>View History</button>
-        <button className={view === 'insights' ? 'active' : ''} onClick={() => setView('insights')}>Insights</button>
-        <button className={view === 'emergency' ? 'active' : ''} onClick={() => setView('emergency')}>Emergency Info</button>
+      <a href="#main-content" className="skip-to-content">
+        Skip to main content
+      </a>
+      <header>
+        <h1>Canine Seizure Tracker</h1>
+      </header>
+      <nav aria-label="Main navigation">
+        <button 
+          className={view === 'log' ? 'active' : ''} 
+          onClick={() => setView('log')}
+          aria-label="Log new seizure"
+          aria-current={view === 'log' ? 'page' : undefined}
+        >
+          Log New Seizure
+        </button>
+        <button 
+          className={view === 'batchImport' ? 'active' : ''} 
+          onClick={() => setView('batchImport')}
+          aria-label="Batch import seizure history"
+          aria-current={view === 'batchImport' ? 'page' : undefined}
+        >
+          Batch Import
+        </button>
+        <button 
+          className={view === 'history' ? 'active' : ''} 
+          onClick={() => setView('history')}
+          aria-label="View seizure history"
+          aria-current={view === 'history' ? 'page' : undefined}
+        >
+          View History
+        </button>
+        <button 
+          className={view === 'insights' ? 'active' : ''} 
+          onClick={() => setView('insights')}
+          aria-label="View data insights"
+          aria-current={view === 'insights' ? 'page' : undefined}
+        >
+          Insights
+        </button>
+        <button 
+          className={view === 'emergency' ? 'active' : ''} 
+          onClick={() => setView('emergency')}
+          aria-label="Emergency information"
+          aria-current={view === 'emergency' ? 'page' : undefined}
+        >
+          Emergency Info
+        </button>
       </nav>
-      <main>
+      <main id="main-content" role="main" aria-live="polite">
         {renderContent()}
       </main>
     </div>
