@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/proj_dog_seizure_tracking_app/static/css/main.7a63e94d.css",
-    "main.js": "/proj_dog_seizure_tracking_app/static/js/main.3a7c2ac2.js",
+    "main.js": "/proj_dog_seizure_tracking_app/static/js/main.156e25cb.js",
     "static/js/453.670e15c7.chunk.js": "/proj_dog_seizure_tracking_app/static/js/453.670e15c7.chunk.js",
     "index.html": "/proj_dog_seizure_tracking_app/index.html",
     "main.7a63e94d.css.map": "/proj_dog_seizure_tracking_app/static/css/main.7a63e94d.css.map",
-    "main.3a7c2ac2.js.map": "/proj_dog_seizure_tracking_app/static/js/main.3a7c2ac2.js.map",
+    "main.156e25cb.js.map": "/proj_dog_seizure_tracking_app/static/js/main.156e25cb.js.map",
     "453.670e15c7.chunk.js.map": "/proj_dog_seizure_tracking_app/static/js/453.670e15c7.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.7a63e94d.css",
-    "static/js/main.3a7c2ac2.js"
+    "static/js/main.156e25cb.js"
   ]
 }
