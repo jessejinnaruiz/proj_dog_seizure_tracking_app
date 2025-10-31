@@ -266,14 +266,8 @@ function App() {
                             <div className="content-card">
                                 <h3 className="subheader">Frequency</h3>
                                 <p><strong>Last Seizure:</strong> {new Date(insights.lastSeizureDate).toLocaleDateString()}</p>
-                                <div className="content-card">
-                                  <h3>Average Time Between Seizures</h3>
-                                  <p>{insights.averageTimeBetween}</p>
-                                </div>
-                                <div className="content-card">
-                                  <h3>Longest Time Without Seizures</h3>
-                                  <p>{insights.longestSeizureFreePeriod}</p>
-                                </div>
+                                <p><strong>Average Time Between Seizures:</strong> {insights.averageTimeBetween}</p>
+                                <p><strong>Longest Time Without Seizures:</strong> {insights.longestSeizureFreePeriod}</p>
                             </div>
 
                             <div className="content-card">
