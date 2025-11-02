@@ -1,25 +1,30 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Seizure Tracker",
+  "name": "Canine Seizure Tracker",
+  "description": "Track your dog's seizures, identify patterns, and work offline",
   "icons": [
     {
-      "src": "favicon.ico",
+      "src": "favicon2.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "icon192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
-      "src": "logo512.png",
+      "src": "icon500.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "500x500",
+      "purpose": "any maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#FF69B4",
+  "background_color": "#FF69B4",
+  "orientation": "portrait",
+  "categories": ["health", "medical", "lifestyle"]
 }

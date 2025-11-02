@@ -180,3 +180,39 @@ export const addSeizure = async (seizure) => {
         throw error;
     }
 };
+
+/**
+ * Exports all seizure data as CSV
+ * @returns {Promise<string>} - CSV string of all seizures
+ */
+export const exportDataAsCSV = async () => {
+    const seizures = await getSeizures();
+    
+    // CSV header
+    const header = "Date,Time,Duration (min),Duration (sec),Trigger,Description\n";
+    
+    // CSV rows
+    const rows = seizures.map(s => {
+        const date = new Date(s.dateTime);
+        const dateStr = date.toLocaleDateString('en-US'); // e.g., "10/5/2024"
+        const timeStr = date.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+        }); // e.g., "8:06 PM"
+        
+        // Escape commas and quotes in text fields
+        const escapeCsv = (str) => {
+            if (!str) return '';
+            const cleaned = str.replace(/"/g, '""'); // Escape quotes
+            return cleaned.includes(',') ? `"${cleaned}"` : cleaned;
+        };
+        
+        const trigger = escapeCsv(s.trigger || '');
+        const desc = escapeCsv(s.description || '');
+        
+        return `${dateStr},${timeStr},${s.duration_minutes},${s.duration_seconds},${trigger},${desc}`;
+    }).join('\n');
+    
+    return header + rows;
+};

@@ -1,7 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { initDB, getSeizures, addSeizure } from './database';
+import { initDB, getSeizures, addSeizure, exportDataAsCSV } from './database';
 import BatchImport from './BatchImport';
 import './App.css';
+
+/**
+ * Data Privacy Notice Component - displayed on all pages
+ */
+const DataPrivacyNotice = () => (
+  <div className="data-privacy-notice" role="alert" aria-live="polite">
+    <h3>Important: Data Storage Information</h3>
+    <p><strong>Your data is stored locally:</strong> This application stores all seizure records in your browser's localStorage. Your data never leaves your device and is completely private.</p>
+    <p><strong>However, this means:</strong></p>
+    <ul>
+      <li>Clearing browser data will <strong>permanently delete</strong> all records</li>
+      <li>Uninstalling the PWA will erase your history</li>
+      <li>Data is <strong>not synced</strong> across devices</li>
+      <li><strong>Recommendation:</strong> Regularly export your data as a backup using the View History → Export Data button</li>
+    </ul>
+  </div>
+);
 
 /**
  * Analyzes seizure data to find patterns.
@@ -97,6 +114,71 @@ function App() {
   const [durationSeconds, setDurationSeconds] = useState('');
   const [description, setDescription] = useState('');
   const [trigger, setTrigger] = useState('');
+
+  /**
+   * Formats datetime string as local time (prevents UTC conversion issues)
+   */
+  const formatLocalDateTime = (dateTimeInput) => {
+    if (!dateTimeInput) return 'N/A';
+    
+    let date;
+    
+    // Handle different input types
+    if (dateTimeInput instanceof Date) {
+      // Already a Date object
+      date = dateTimeInput;
+    } else if (typeof dateTimeInput === 'number') {
+      // Unix timestamp in milliseconds
+      date = new Date(dateTimeInput);
+    } else if (typeof dateTimeInput === 'string') {
+      // String format - ensure ISO format for local time interpretation
+      const isoStr = dateTimeInput.replace(' ', 'T').split('.')[0];
+      date = new Date(isoStr);
+    } else {
+      return String(dateTimeInput);
+    }
+    
+    if (isNaN(date.getTime())) return String(dateTimeInput);
+    
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  };
+
+  /**
+   * Downloads a file to the user's device
+   */
+  const downloadFile = (data, filename, mimeType) => {
+    const blob = new Blob([data], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Exports seizure data as CSV file
+   */
+  const handleExportCSV = async () => {
+    try {
+      const csvData = await exportDataAsCSV();
+      const filename = `dog_seizures_${new Date().toISOString().split('T')[0]}.csv`;
+      downloadFile(csvData, filename, 'text/csv');
+      alert(`Successfully exported ${seizures.length} seizure records!`);
+    } catch (err) {
+      console.error('Export failed:', err);
+      alert('Failed to export data. Please try again.');
+    }
+  };
 
   const loadSeizuresFromDB = async () => {
     try {
@@ -226,19 +308,30 @@ function App() {
               <span id="description-hint" className="sr-only">Provide additional details about the seizure</span>
             </div>
             <button type="submit" aria-label="Save seizure entry">Save Seizure</button>
+            <DataPrivacyNotice />
           </form>
         );
       case 'history':
         return (
           <section aria-labelledby="history-heading">
             <h2 id="history-heading">Seizure History</h2>
+            
+            {seizures.length > 0 && (
+              <div className="export-section">
+                <button onClick={handleExportCSV} className="export-btn" title="Download all seizure data as CSV">
+                  📥 Export Data
+                </button>
+                <span className="export-hint">Download as CSV for backup or sharing with your vet</span>
+              </div>
+            )}
+            
             {seizures.length === 0 ? (
               <p role="status">No seizures logged yet.</p>
             ) : (
               <ul aria-label="List of seizure entries">
                 {seizures.map(s => (
                   <li key={s.id}>
-                    <strong>{new Date(s.dateTime).toLocaleString()}</strong>
+                    <strong>{formatLocalDateTime(s.dateTime)}</strong>
                     <p><strong>Duration:</strong> {s.duration_minutes}m {s.duration_seconds}s</p>
                     <p><strong>Trigger:</strong> {s.trigger || 'N/A'}</p>
                     <p><strong>Description:</strong> {s.description || 'N/A'}</p>
@@ -246,6 +339,7 @@ function App() {
                 ))}
               </ul>
             )}
+            <DataPrivacyNotice />
           </section>
         );
       case 'insights':
@@ -265,7 +359,7 @@ function App() {
                         <div className="insights-grid">
                             <div className="content-card">
                                 <h3 className="subheader">Frequency</h3>
-                                <p><strong>Last Seizure:</strong> {new Date(insights.lastSeizureDate).toLocaleDateString()}</p>
+                                <p><strong>Last Seizure:</strong> {formatLocalDateTime(insights.lastSeizureDate)}</p>
                                 <p><strong>Average Time Between Seizures:</strong> {insights.averageTimeBetween}</p>
                                 <p><strong>Longest Time Without Seizures:</strong> {insights.longestSeizureFreePeriod}</p>
                             </div>
@@ -295,10 +389,16 @@ function App() {
                         </div>
                     </div>
                 )}
+                <DataPrivacyNotice />
             </div>
         );
       case 'batchImport':
-        return <BatchImport onImportComplete={loadSeizuresFromDB} />;
+        return (
+          <div>
+            <BatchImport onImportComplete={loadSeizuresFromDB} />
+            <DataPrivacyNotice />
+          </div>
+        );
       case 'emergency':
         return (
             <div>
@@ -312,6 +412,7 @@ function App() {
                     <li>Your dog has multiple seizures in a row (cluster seizures).</li>
                     <li>Your dog does not seem to recover fully within an hour of the seizure.</li>
                 </ul>
+                <DataPrivacyNotice />
             </div>
         );
       default:
@@ -322,9 +423,6 @@ function App() {
 
   return (
     <div className="App">
-      <a href="#main-content" className="skip-to-content">
-        Skip to main content
-      </a>
       <header>
         <h1>Canine Seizure Tracker</h1>
       </header>

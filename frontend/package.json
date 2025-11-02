@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "0.1.0",
-  "homepage": "https://jessejinnaruiz.github.io/proj_dog_seizure_tracking_app",
+  "homepage": "https://www.dogseizuretracker.com",
   "private": true,
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.28.0",

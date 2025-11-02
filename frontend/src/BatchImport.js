@@ -2,6 +2,117 @@ import React, { useState } from 'react';
 import { parseSeizureText } from './parser';
 import { addSeizure } from './database';
 
+/**
+ * Detects if the input text is CSV format
+ */
+const detectCSV = (text) => {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) {
+        console.log('Not CSV: Less than 2 lines');
+        return false;
+    }
+    
+    const firstLine = lines[0].toLowerCase();
+    console.log('First line:', firstLine);
+    
+    const hasDate = firstLine.includes('date');
+    const hasOther = firstLine.includes('time') || firstLine.includes('duration') || firstLine.includes('trigger');
+    const isCSV = hasDate && hasOther;
+    
+    console.log('CSV detection:', { hasDate, hasOther, isCSV });
+    
+    return isCSV;
+};
+
+/**
+ * Parses CSV/TSV format (handles both comma and tab-separated)
+ */
+const parseCSV = (csvText) => {
+    const lines = csvText.trim().split('\n');
+    
+    // Detect delimiter (tab or comma)
+    const firstLine = lines[0];
+    const delimiter = firstLine.includes('\t') ? '\t' : ',';
+    console.log('Detected delimiter:', delimiter === '\t' ? 'TAB' : 'COMMA');
+    
+    const headers = lines[0].split(delimiter).map(h => h.replace(/"/g, '').trim().toLowerCase());
+    console.log('Headers:', headers);
+    
+    const seizures = [];
+    
+    // Skip header row, parse data rows
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        // Split by delimiter (tab or comma) but respect quoted values if comma
+        let values;
+        
+        if (delimiter === '\t') {
+            // Tab-separated: simple split
+            values = line.split('\t').map(v => v.trim());
+        } else {
+            // Comma-separated: respect quotes
+            values = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let char of line) {
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    values.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            values.push(current.trim()); // Add last value
+        }
+        
+        // Find column indices
+        const dateIdx = headers.findIndex(h => h.includes('date'));
+        const timeIdx = headers.findIndex(h => h.includes('time'));
+        const minIdx = headers.findIndex(h => h.includes('min'));
+        const secIdx = headers.findIndex(h => h.includes('sec'));
+        const triggerIdx = headers.findIndex(h => h.includes('trigger'));
+        const descIdx = headers.findIndex(h => h.includes('desc'));
+        
+        // Combine date and time
+        const dateStr = values[dateIdx] || '';
+        const timeStr = values[timeIdx] || '';
+        
+        console.log(`Row ${i}: date="${dateStr}", time="${timeStr}"`);
+        
+        const dateTime = new Date(`${dateStr} ${timeStr}`);
+        
+        if (isNaN(dateTime.getTime())) {
+            console.warn(`Skipping row ${i} - invalid date: "${dateStr}" "${timeStr}"`);
+            continue; // Skip invalid dates
+        }
+        
+        // Convert to datetime-local format (YYYY-MM-DDTHH:mm)
+        const year = dateTime.getFullYear();
+        const month = String(dateTime.getMonth() + 1).padStart(2, '0');
+        const day = String(dateTime.getDate()).padStart(2, '0');
+        const hours = String(dateTime.getHours()).padStart(2, '0');
+        const minutes = String(dateTime.getMinutes()).padStart(2, '0');
+        const formattedDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+        
+        seizures.push({
+            dateTime: formattedDateTime,
+            duration: {
+                minutes: parseInt(values[minIdx]) || 0,
+                seconds: parseInt(values[secIdx]) || 0
+            },
+            trigger: values[triggerIdx] || '',
+            description: values[descIdx] || ''
+        });
+    }
+    
+    return seizures;
+};
+
 const BatchImport = ({ onImportComplete }) => {
     const [inputText, setInputText] = useState('');
     const [parsedSeizures, setParsedSeizures] = useState([]);
@@ -10,7 +121,17 @@ const BatchImport = ({ onImportComplete }) => {
     const [importResults, setImportResults] = useState(null);
 
     const handleParse = () => {
-        const seizures = parseSeizureText(inputText);
+        let seizures;
+        const isCSV = detectCSV(inputText);
+        
+        if (isCSV) {
+            seizures = parseCSV(inputText);
+            console.log('Detected CSV format, parsed', seizures.length, 'records');
+        } else {
+            seizures = parseSeizureText(inputText);
+            console.log('Detected freeform text, parsed', seizures.length, 'records');
+        }
+        
         setParsedSeizures(seizures);
         setIsPreview(true);
         setImportResults(null);
@@ -64,7 +185,11 @@ const BatchImport = ({ onImportComplete }) => {
             <h2>Batch Import Seizure History</h2>
             
             <div className="batch-import-instructions">
-                <h3>How to Format Your Text:</h3>
+                <h3>How to Use:</h3>
+                <p><strong>Option 1: Restore from Export</strong></p>
+                <p>Paste a previously exported CSV file (with headers) to restore your data.</p>
+                
+                <p><strong>Option 2: Import from Text Notes</strong></p>
                 <p>Enter one seizure per line. The parser will extract:</p>
                 <ul>
                     <li><strong>Date:</strong> "June 16, 2024" or "6/16/2024" or "16 June 2024"</li>
