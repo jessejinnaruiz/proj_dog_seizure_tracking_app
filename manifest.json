@@ -9,15 +9,15 @@
       "type": "image/x-icon"
     },
     {
-      "src": "logo192.png",
+      "src": "icon192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "logo512.png",
+      "src": "icon500.png",
       "type": "image/png",
-      "sizes": "512x512",
+      "sizes": "500x500",
       "purpose": "any maskable"
     }
   ],
