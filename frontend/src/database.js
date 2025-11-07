@@ -1,32 +1,65 @@
-// DuckDB-WASM implementation using jsdelivr CDN bundles
+// DuckDB-WASM implementation with IndexedDB for persistent storage
 
 import * as duckdb from '@duckdb/duckdb-wasm';
+import { openDB } from 'idb';
 
 const DB_STORAGE_KEY = 'dog_seizure_app_db_v2';
-let db = null;
+const IDB_NAME = 'DogSeizureTrackerDB';
+const IDB_STORE = 'duckdb_storage';
+const IDB_VERSION = 1;
 
-const bufferToBase64 = (buffer) => {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
+let db = null;
+let idbInstance = null;
+
+/**
+ * Initialize IndexedDB for storing DuckDB database file
+ */
+const initIndexedDB = async () => {
+    if (idbInstance) return idbInstance;
+    
+    idbInstance = await openDB(IDB_NAME, IDB_VERSION, {
+        upgrade(db) {
+            // Create object store if it doesn't exist
+            if (!db.objectStoreNames.contains(IDB_STORE)) {
+                db.createObjectStore(IDB_STORE);
+            }
+        },
+    });
+    
+    return idbInstance;
 };
 
-const base64ToBuffer = (base64) => {
-    const binary_string = window.atob(base64);
-    const len = binary_string.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-        bytes[i] = binary_string.charCodeAt(i);
+/**
+ * Save data to IndexedDB
+ */
+const saveToIndexedDB = async (key, value) => {
+    const idb = await initIndexedDB();
+    await idb.put(IDB_STORE, value, key);
+};
+
+/**
+ * Load data from IndexedDB
+ */
+const loadFromIndexedDB = async (key) => {
+    const idb = await initIndexedDB();
+    return await idb.get(IDB_STORE, key);
+};
+
+/**
+ * Request persistent storage permission (helps prevent iOS from clearing data)
+ */
+const requestPersistentStorage = async () => {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persist();
+        console.log(`Persistent storage granted: ${isPersisted}`);
+        return isPersisted;
     }
-    return bytes.buffer;
+    return false;
 };
 
 /**
  * Initializes the DuckDB-WASM database.
- * It loads data from localStorage if available.
+ * It loads data from IndexedDB if available (better iOS PWA persistence than localStorage).
  */
 export const initDB = async () => {
     if (db) return db;
@@ -34,6 +67,9 @@ export const initDB = async () => {
     console.log('1. Starting DuckDB-WASM initialization with CDN bundles...');
     
     try {
+        // Request persistent storage for better iOS reliability
+        await requestPersistentStorage();
+        
         const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
         const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
         
@@ -49,20 +85,50 @@ export const initDB = async () => {
         await db.instantiate(bundle.mainModule);
         console.log('5. Database instantiated successfully.');
         
-        const savedDbBase64 = localStorage.getItem(DB_STORAGE_KEY);
+        // Try to load from IndexedDB first (new method)
+        let savedDbBuffer = await loadFromIndexedDB(DB_STORAGE_KEY);
         
-        if (savedDbBase64) {
-            console.log('6. Loading existing database from localStorage...');
+        // Fallback: migrate from old localStorage if IndexedDB is empty
+        if (!savedDbBuffer) {
+            console.log('6. Checking for legacy localStorage data...');
+            const savedDbBase64 = localStorage.getItem(DB_STORAGE_KEY);
+            if (savedDbBase64) {
+                console.log('6a. Migrating data from localStorage to IndexedDB...');
+                try {
+                    // Convert base64 string to buffer
+                    const binary_string = window.atob(savedDbBase64);
+                    const len = binary_string.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binary_string.charCodeAt(i);
+                    }
+                    savedDbBuffer = bytes.buffer;
+                    
+                    // Save to IndexedDB
+                    await saveToIndexedDB(DB_STORAGE_KEY, savedDbBuffer);
+                    
+                    // Remove from localStorage (migration complete)
+                    localStorage.removeItem(DB_STORAGE_KEY);
+                    console.log('6b. Migration complete. Data now in IndexedDB.');
+                } catch (migrationError) {
+                    console.warn('Failed to migrate localStorage data:', migrationError);
+                    savedDbBuffer = null;
+                }
+            }
+        }
+        
+        if (savedDbBuffer) {
+            console.log('7. Loading existing database from IndexedDB...');
             try {
-                const savedDbBuffer = base64ToBuffer(savedDbBase64);
                 await db.registerFileBuffer('seizures.db', new Uint8Array(savedDbBuffer));
                 const c = await db.connect();
                 await c.query("ATTACH 'seizures.db'");
                 await c.close();
-                console.log('7. Existing database loaded.');
+                console.log('8. Existing database loaded.');
             } catch (loadError) {
                 console.warn('Failed to load existing database (corrupted or incompatible format). Creating new one...', loadError);
-                localStorage.removeItem(DB_STORAGE_KEY);
+                // Clear corrupted data from IndexedDB
+                await saveToIndexedDB(DB_STORAGE_KEY, null);
                 const c = await db.connect();
                 await c.query(`
                     CREATE TABLE IF NOT EXISTS seizures (
@@ -75,10 +141,10 @@ export const initDB = async () => {
                     );
                 `);
                 await c.close();
-                console.log('7. New database created after clearing corrupted data.');
+                console.log('8. New database created after clearing corrupted data.');
             }
         } else {
-            console.log('6. No saved database found. Creating new one...');
+            console.log('7. No saved database found. Creating new one...');
             const c = await db.connect();
             await c.query(`
                 CREATE TABLE IF NOT EXISTS seizures (
@@ -91,10 +157,10 @@ export const initDB = async () => {
                 );
             `);
             await c.close();
-            console.log('7. New database created.');
+            console.log('8. New database created.');
         }
         
-        console.log('8. DuckDB-WASM initialization complete!');
+        console.log('9. DuckDB-WASM initialization complete!');
         return db;
         
     } catch (error) {
@@ -104,15 +170,16 @@ export const initDB = async () => {
 };
 
 /**
- * Saves the current state of the database to localStorage.
+ * Saves the current state of the database to IndexedDB.
+ * IndexedDB provides better persistence on iOS PWAs compared to localStorage.
  */
 export const saveDB = async () => {
     if (!db) throw new Error('Database not initialized!');
     
     try {
         const buffer = await db.copyFileToBuffer(':memory:');
-        localStorage.setItem(DB_STORAGE_KEY, bufferToBase64(buffer));
-        console.log('Database saved to localStorage.');
+        await saveToIndexedDB(DB_STORAGE_KEY, buffer);
+        console.log('Database saved to IndexedDB.');
     } catch (error) {
         console.error('Failed to save database:', error);
         throw error;
