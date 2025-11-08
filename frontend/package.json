@@ -4,7 +4,6 @@
   "homepage": "https://www.dogseizuretracker.com",
   "private": true,
   "dependencies": {
-    "@duckdb/duckdb-wasm": "^1.28.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
@@ -12,7 +11,7 @@
     "idb": "^8.0.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "react-scripts": "^5.0.1",
+    "react-scripts": "5.0.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
