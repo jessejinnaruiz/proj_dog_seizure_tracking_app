@@ -41,7 +41,6 @@
     ]
   },
   "devDependencies": {
-    "express": "^5.1.0",
     "gh-pages": "^6.3.0"
   }
 }
