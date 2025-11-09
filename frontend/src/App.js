@@ -9,7 +9,7 @@ import './App.css';
 const DataPrivacyNotice = () => (
   <div className="data-privacy-notice" role="alert" aria-live="polite">
     <h3>Important: Data Storage Information</h3>
-    <p><strong>Your data is stored locally:</strong> This application stores all seizure records in your browser's localStorage. Your data never leaves your device and is completely private.</p>
+    <p><strong>Your data is stored locally:</strong> This application stores all seizure records in your browser's IndexedDB (local database). Your data never leaves your device and is completely private.</p>
     <p><strong>However, this means:</strong></p>
     <ul>
       <li>Clearing browser data will <strong>permanently delete</strong> all records</li>
