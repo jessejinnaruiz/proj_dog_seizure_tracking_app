@@ -146,6 +146,45 @@ export const saveDB = async () => {
 };
 
 /**
+ * Updates an existing seizure record in IndexedDB
+ * @param {Number} id - The ID of the seizure to update
+ * @param {Object} updatedData - Updated seizure data
+ */
+export const updateSeizure = async (id, updatedData) => {
+    try {
+        const db = await getDB();
+        
+        // Get existing seizure
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        const existingSeizure = await store.get(id);
+        
+        if (!existingSeizure) {
+            throw new Error(`Seizure with id ${id} not found`);
+        }
+        
+        // Update with new data
+        const updatedSeizure = {
+            ...existingSeizure,
+            dateTime: updatedData.dateTime,
+            duration_minutes: updatedData.duration.minutes || 0,
+            duration_seconds: updatedData.duration.seconds || 0,
+            description: updatedData.description || '',
+            trigger: updatedData.trigger || ''
+        };
+        
+        // Save updated record
+        await store.put(updatedSeizure);
+        await tx.done;
+        
+        console.log('Seizure updated in IndexedDB:', updatedSeizure);
+    } catch (error) {
+        console.error('Failed to update seizure:', error);
+        throw error;
+    }
+};
+
+/**
  * Exports all seizure data as CSV
  * @returns {Promise<string>} - CSV string of all seizures
  */

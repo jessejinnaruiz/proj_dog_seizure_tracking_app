@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { initDB, getSeizures, addSeizure, exportDataAsCSV } from './database';
+import { initDB, getSeizures, addSeizure, updateSeizure, exportDataAsCSV } from './database';
 import BatchImport from './BatchImport';
 import './App.css';
 
@@ -114,6 +114,7 @@ function App() {
   const [durationSeconds, setDurationSeconds] = useState('');
   const [description, setDescription] = useState('');
   const [trigger, setTrigger] = useState('');
+  const [editingSeizure, setEditingSeizure] = useState(null); // null when adding new, seizure object when editing
 
   /**
    * Formats datetime string as local time (prevents UTC conversion issues)
@@ -209,9 +210,10 @@ function App() {
   }, []);
 
   const insights = useMemo(() => analyzeSeizureData(seizures), [seizures]);
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const newSeizure = {
+    const seizureData = {
       dateTime,
       duration: {
         minutes: parseInt(durationMinutes, 10) || 0,
@@ -222,19 +224,50 @@ function App() {
     };
 
     try {
-      await addSeizure(newSeizure);
+      if (editingSeizure) {
+        // Update existing seizure
+        await updateSeizure(editingSeizure.id, seizureData);
+        setEditingSeizure(null);
+      } else {
+        // Add new seizure
+        await addSeizure(seizureData);
+      }
+      
+      // Clear form
       setDateTime('');
       setDurationMinutes('');
       setDurationSeconds('');
       setDescription('');
       setTrigger('');
+      
       await loadSeizuresFromDB();
       setView('history');
-
     } catch (err) {
       console.error(err);
-      setError('Failed to save seizure to the local database.');
+      setError(`Failed to ${editingSeizure ? 'update' : 'save'} seizure to the local database.`);
     }
+  };
+  
+  const handleEdit = (seizure) => {
+    // Convert datetime format for input (needs to be in format: 2025-11-07T20:43)
+    const dateTimeStr = seizure.dateTime.replace(' ', 'T').split('.')[0].substring(0, 16);
+    
+    setEditingSeizure(seizure);
+    setDateTime(dateTimeStr);
+    setDurationMinutes(seizure.duration_minutes.toString());
+    setDurationSeconds(seizure.duration_seconds.toString());
+    setDescription(seizure.description || '');
+    setTrigger(seizure.trigger || '');
+    setView('log');
+  };
+  
+  const handleCancelEdit = () => {
+    setEditingSeizure(null);
+    setDateTime('');
+    setDurationMinutes('');
+    setDurationSeconds('');
+    setDescription('');
+    setTrigger('');
   };
   const renderContent = () => {
     if (isLoading) {
@@ -307,7 +340,21 @@ function App() {
               ></textarea>
               <span id="description-hint" className="sr-only">Provide additional details about the seizure</span>
             </div>
-            <button type="submit" aria-label="Save seizure entry">Save Seizure</button>
+            <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
+              <button type="submit" aria-label="Save seizure entry">
+                {editingSeizure ? 'Update Seizure' : 'Save Seizure'}
+              </button>
+              {editingSeizure && (
+                <button 
+                  type="button" 
+                  onClick={handleCancelEdit}
+                  style={{backgroundColor: '#6c757d'}}
+                  aria-label="Cancel editing"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
             <DataPrivacyNotice />
           </form>
         );
@@ -331,10 +378,32 @@ function App() {
               <ul aria-label="List of seizure entries">
                 {seizures.map(s => (
                   <li key={s.id}>
-                    <strong>{formatLocalDateTime(s.dateTime)}</strong>
-                    <p><strong>Duration:</strong> {s.duration_minutes}m {s.duration_seconds}s</p>
-                    <p><strong>Trigger:</strong> {s.trigger || 'N/A'}</p>
-                    <p><strong>Description:</strong> {s.description || 'N/A'}</p>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px'}}>
+                      <div style={{flex: 1}}>
+                        <strong>{formatLocalDateTime(s.dateTime)}</strong>
+                        <p><strong>Duration:</strong> {s.duration_minutes}m {s.duration_seconds}s</p>
+                        <p><strong>Trigger:</strong> {s.trigger || 'N/A'}</p>
+                        <p><strong>Description:</strong> {s.description || 'N/A'}</p>
+                      </div>
+                      <button 
+                        onClick={() => handleEdit(s)}
+                        className="edit-btn"
+                        style={{
+                          padding: '8px 16px',
+                          backgroundColor: '#007bff',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '5px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          flexShrink: 0,
+                          height: 'fit-content'
+                        }}
+                        aria-label={`Edit seizure from ${formatLocalDateTime(s.dateTime)}`}
+                      >
+                        ✏️ Edit
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
