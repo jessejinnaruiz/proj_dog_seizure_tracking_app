@@ -20,6 +20,34 @@ const DataPrivacyNotice = () => (
   </div>
 );
 
+const ContactNotice = () => (
+  <footer
+    role="contentinfo"
+    aria-label="Contact information"
+    style={{
+      position: 'fixed',
+      right: '12px',
+      bottom: '12px',
+      backgroundColor: '#1f2937',
+      color: 'white',
+      padding: '8px 12px',
+      borderRadius: '9999px',
+      fontSize: '12px',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+      zIndex: 9999,
+      opacity: 0.92
+    }}
+  >
+    <span>Report bugs: </span>
+    <a
+      href="mailto:dogseizuretrackerapp@proton.me"
+      style={{ color: '#93c5fd', textDecoration: 'underline' }}
+    >
+      dogseizuretrackerapp@proton.me
+    </a>
+  </footer>
+);
+
 /**
  * Analyzes seizure data to find patterns.
  * @param {Array} seizures - The array of seizure objects.
@@ -540,6 +568,7 @@ function App() {
       <main id="main-content" role="main" aria-live="polite">
         {renderContent()}
       </main>
+      <ContactNotice />
     </div>
   );
 }
