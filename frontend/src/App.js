@@ -8,14 +8,14 @@ import './App.css';
  */
 const DataPrivacyNotice = () => (
   <div className="data-privacy-notice" role="alert" aria-live="polite">
-    <h3>Important: Data Storage Information</h3>
-    <p><strong>Your data is stored locally:</strong> This application stores all seizure records in your browser's IndexedDB (local database). Your data never leaves your device and is completely private.</p>
-    <p><strong>However, this means:</strong></p>
+    <h3> Privacy & Data Information</h3>
+    <p><strong>100% Local Storage:</strong> All seizure records are saved directly in your browser using IndexedDB technology. Nothing is uploaded to the cloud—your information stays private on your device.</p>
+    <p><strong>Important considerations:</strong></p>
     <ul>
-      <li>Clearing browser data will <strong>permanently delete</strong> all records</li>
-      <li>Uninstalling the PWA will erase your history</li>
-      <li>Data is <strong>not synced</strong> across devices</li>
-      <li><strong>Recommendation:</strong> Regularly export your data as a backup using the View History → Export Data button</li>
+      <li>If you clear your browser's data, all seizure records will be <strong>lost permanently</strong></li>
+      <li>Removing this app from your device will delete your entire history</li>
+      <li>Records are <strong>device-specific</strong> and won't appear on other phones or computers</li>
+      <li><strong> Best practice:</strong> Use the Export Data button in View History to save regular backups</li>
     </ul>
   </div>
 );
